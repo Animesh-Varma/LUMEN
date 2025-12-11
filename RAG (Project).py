@@ -171,19 +171,19 @@ class Assistant:
         # --- MEMORY / CONTEXT ---
         # =========================================================
 
-        # history_context = ""
-        # if self.chat_history:
-        #     history_context = "Previous Conversation:\n"
-        #     recent_history = self.chat_history[-3:]
-        #     for turn in recent_history:
-        #         history_context += f"Visitor: {turn['user']}\nAssistant: {turn['bot']}\n"
+        history_context = ""
+        if self.chat_history:
+            history_context = "Previous Conversation:\n"
+            recent_history = self.chat_history[-3:]
+            for turn in recent_history:
+                history_context += f"Visitor: {turn['user']}\nAssistant: {turn['bot']}\n"
         # =========================================================
 
         # --- STEP 2: AUGMENTATION ---
         # Add {history_context}
 
         prompt = f"""
-        You are a professional technical assistant at a software stall for Lotus Valley school, Mandsaur's annual function named "Dhanak".
+        You are a professional technical assistant at a software stall for Lotus Valley school's annual function named Dhanak.
         You are showcasing: Sigil (Encryption), Coeus (NFC Tool), and LOTL (Game).
 
         Instructions:
@@ -193,6 +193,9 @@ class Assistant:
 
         Context Data:
         {context_text}
+        
+        Conversation history:
+        {history_context}
 
         User Question: {user_question}
 
@@ -202,15 +205,17 @@ class Assistant:
         # --- STEP 3: GENERATION ---
         logger.info("Generating response...")
         try:
-            response = self.llm.invoke(prompt)
+            full_response_accumulator = ""
+            for chunk in self.llm.stream(prompt):
+                full_response_accumulator += chunk
+                yield chunk
 
             # =========================================================
             # --- SECTION: UPDATE MEMORY ---
             # =========================================================
-            # self.chat_history.append({"user": user_question, "bot": response})
+            self.chat_history.append({"user": user_question, "bot": full_response_accumulator})
             # =========================================================
 
-            return response
         except Exception as error:
             logger.error(f"Generation failed: {error}")
             return "I encountered an error generating the response."
@@ -237,9 +242,11 @@ if __name__ == "__main__":
 
             response_text = bot.generate_answer(query)
 
-            print(f"\nAssistant >> {response_text}\n")
+            print("\nAssistant >> ", end="", flush=True)
+            for chunk in bot.generate_answer(query):
+                print(chunk, end="", flush=True)
+            print("\n")
             print("-" * 60)
-
         except KeyboardInterrupt:
             logger.info("Force shutdown.")
             break
