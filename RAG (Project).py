@@ -144,8 +144,8 @@ class Assistant:
         else:
             logger.info("Creating new vector index from raw data...")
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500,
-                chunk_overlap=50
+                chunk_size=1500,
+                chunk_overlap=200
             )
             docs = text_splitter.create_documents([RAW_DATA])
             self.vector_store = Chroma.from_documents(
