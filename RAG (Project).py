@@ -114,8 +114,12 @@ class Assistant:
         logger.info("Retrieving relevant context...")
         if self.verbose:
             print(f"\n[VERBOSE] Querying Vector DB for: '{user_question}'")
+        db_start = time.time()
         relevant_docs = self.vector_store.similarity_search(user_question, k=5)
+        db_end = time.time()
+        db_duration = db_end - db_start
         context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
+        context_token_count = int(len(context_text) / 4)
 
         # =========================================================
         # --- MEMORY / CONTEXT ---
@@ -167,8 +171,12 @@ class Assistant:
         try:
             full_response_accumulator = ""
             for chunk in self.llm.stream(prompt):
-                full_response_accumulator += chunk
-                yield chunk
+                text_chunk = str(chunk)
+                if first_token_time is None and text_chunk.strip():
+                    first_token_time = time.time()
+                char_count += len(text_chunk)
+                full_response_accumulator += text_chunk
+                yield text_chunk
 
             # =========================================================
             # --- SECTION: UPDATE MEMORY ---
@@ -179,15 +187,25 @@ class Assistant:
             if self.verbose:
                 end_time = time.time()
                 total_duration = end_time - start_time
-                ttft = first_token_time - start_time if first_token_time else 0
-                speed = char_count / total_duration if total_duration > 0 else 0
+                ttft = (first_token_time - start_time) if first_token_time else 0
 
-                print("\n\n" + "-" * 20 + " [VERBOSE] STATS " + "-" * 20)
-                print(f"Total Duration:   {total_duration:.2f}s")
-                print(f"Time to 1st tok:  {ttft:.2f}s")
-                print(f"Total Chars:      {char_count}")
-                print(f"Generation Rate:  {speed:.2f} chars/sec")
-                print("-" * 47)
+                # ESTIMATE TOKENS GENERATED
+                est_tokens = int(char_count / 4)
+                # Calculate Tokens Per Second (TPS)
+                tps = est_tokens / total_duration if total_duration > 0 else 0
+
+                print("\n\n" + "-" * 20 + " GENERATION STATS " + "-" * 20)
+                print(f"[DATABASE RETRIEVAL]")
+                print(f"• Duration:       {db_duration:.4f}s")
+                print(f"• Documents:      {len(relevant_docs)} chunks retrieved")
+                print(f"• Context Size:   ~{context_token_count} tokens input")
+
+                print(f"\n[LLM GENERATION]")
+                print(f"• Duration:       {total_duration:.2f}s")
+                print(f"• Time to 1st:    {ttft:.2f}s (Latency)")
+                print(f"• Output Size:    ~{est_tokens} tokens generated")
+                print(f"• Speed:          {tps:.2f} tokens/sec")
+                print("-" * 58)
 
         except Exception as error:
             logger.error(f"Generation failed: {error}")
