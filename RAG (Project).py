@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import time
+import argparse
 from langchain_ollama import OllamaLLM, OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -9,6 +10,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # ==========================================
 # 1. CONFIGURATION & LOGGING
 # ==========================================
+parser = argparse.ArgumentParser(description="Project Assistant RAG")
+parser.add_argument("--verbose", action="store_true", help="Show detailed prompts and generation stats")
+args, unknown = parser.parse_known_args()
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -16,6 +21,10 @@ logging.basicConfig(
     stream = sys.stdout
 )
 logger = logging.getLogger(__name__)
+
+if not args.verbose:
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # System Constants
 LLM_MODEL = "gemma3n:e4b"
@@ -48,7 +57,8 @@ RAW_DATA = load_knowledge_base()
 # 3. CLASS: MANUAL RAG PIPELINE
 # ==========================================
 class Assistant:
-    def __init__(self):
+    def __init__(self, verbose_mode=False):
+        self.verbose = verbose_mode
         self.llm = None
         self.vector_store = None
         # Placeholder list for conversation memory
@@ -102,7 +112,9 @@ class Assistant:
 
         # --- STEP 1: RETRIEVAL ---
         logger.info("Retrieving relevant context...")
-        relevant_docs = self.vector_store.similarity_search(user_question, k=4)
+        if self.verbose:
+            print(f"\n[VERBOSE] Querying Vector DB for: '{user_question}'")
+        relevant_docs = self.vector_store.similarity_search(user_question, k=5)
         context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
 
         # =========================================================
@@ -141,8 +153,17 @@ class Assistant:
         Answer:
         """
 
+        if self.verbose:
+            print("\n" + "="*20 + " [VERBOSE] FULL CONTEXT SENT TO LLM " + "="*20)
+            print(prompt)
+            print("="*70 + "\n")
+
         # --- STEP 3: GENERATION ---
         logger.info("Generating response...")
+        start_time = time.time()
+        first_token_time = None
+        char_count = 0
+
         try:
             full_response_accumulator = ""
             for chunk in self.llm.stream(prompt):
@@ -155,6 +176,19 @@ class Assistant:
             self.chat_history.append({"user": user_question, "bot": full_response_accumulator})
             # =========================================================
 
+            if self.verbose:
+                end_time = time.time()
+                total_duration = end_time - start_time
+                ttft = first_token_time - start_time if first_token_time else 0
+                speed = char_count / total_duration if total_duration > 0 else 0
+
+                print("\n\n" + "-" * 20 + " [VERBOSE] STATS " + "-" * 20)
+                print(f"Total Duration:   {total_duration:.2f}s")
+                print(f"Time to 1st tok:  {ttft:.2f}s")
+                print(f"Total Chars:      {char_count}")
+                print(f"Generation Rate:  {speed:.2f} chars/sec")
+                print("-" * 47)
+
         except Exception as error:
             logger.error(f"Generation failed: {error}")
             return "I encountered an error generating the response."
@@ -164,10 +198,12 @@ class Assistant:
 # 4. MAIN EXECUTION
 # ==========================================
 if __name__ == "__main__":
-    bot = Assistant()
+    bot = Assistant(verbose_mode=args.verbose)
 
     print("\n" + "=" * 60)
     print("ASSISTANT ONLINE (PROJECT PIPELINE)")
+    if args.verbose:
+        print("Status: VERBOSE MODE ENABLED")
     print("Type 'exit' to quit.")
     print("=" * 60 + "\n")
 
@@ -179,11 +215,11 @@ if __name__ == "__main__":
                 logger.info("Session closed by user.")
                 break
 
-            response_text = bot.generate_answer(query)
-
             print("\nAssistant >> ", end="", flush=True)
+
             for chunk in bot.generate_answer(query):
                 print(chunk, end="", flush=True)
+
             print("\n")
             print("-" * 60)
         except KeyboardInterrupt:
@@ -195,3 +231,4 @@ if __name__ == "__main__":
 # - Benchtest
 # - Add README
 # - Add details to projects.txt
+# - Finetune
