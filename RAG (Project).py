@@ -2,8 +2,6 @@ import os
 import sys
 import logging
 import time
-
-# --- Third Party Imports ---
 from langchain_ollama import OllamaLLM, OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -191,3 +189,9 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             logger.info("Force shutdown.")
             break
+
+# TODO:
+# - Add GUI
+# - Benchtest
+# - Add README
+# - Add details to projects.txt
