@@ -28,7 +28,7 @@ if not args.verbose:
 
 # System Constants
 LLM_MODEL = "gemma3n:e4b"
-EMBED_MODEL = "embeddinggemma"
+EMBED_MODEL = "snowflake-arctic-embed:110m"
 DB_PATH = "./db_sigil_store"
 
 # ==========================================
