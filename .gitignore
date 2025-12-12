@@ -1,3 +1,5 @@
 /.venv/
 /db_sigil_store/
+/db_lumen_store/
+/TXT/
 /.idea
