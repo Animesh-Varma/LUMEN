@@ -73,7 +73,7 @@ class Assistant:
         # 1. Setup LLM
         try:
             logger.info(f"Connecting to LLM: {LLM_MODEL}")
-            self.llm = OllamaLLM(model=LLM_MODEL, temperature=0.1)
+            self.llm = OllamaLLM(model=LLM_MODEL, temperature=0.1, keep_alive="-1m")
         except Exception as error:
             logger.error(f"LLM Connection Failed: {error}")
             sys.exit(1)
