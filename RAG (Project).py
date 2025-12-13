@@ -27,7 +27,7 @@ if not args.verbose:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # System Constants
-LLM_MODEL = "gemma3n:e4b"
+LLM_MODEL = "qwen2.5:3b"
 EMBED_MODEL = "snowflake-arctic-embed:110m"
 DB_PATH = "./db_sigil_store"
 
@@ -80,7 +80,7 @@ class Assistant:
 
         # 2. Setup Embeddings & Vector Database
         logger.info(f"Loading Embeddings: {EMBED_MODEL}")
-        embeddings = OllamaEmbeddings(model=EMBED_MODEL)
+        embeddings = OllamaEmbeddings(model=EMBED_MODEL,)
 
         # 3. Process Data
         if os.path.exists(DB_PATH):
@@ -92,7 +92,7 @@ class Assistant:
         else:
             logger.info("Creating new vector index from raw data...")
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1500,
+                chunk_size=350,
                 chunk_overlap=200
             )
             docs = text_splitter.create_documents([RAW_DATA])
@@ -115,10 +115,10 @@ class Assistant:
         if self.verbose:
             print(f"\n[VERBOSE] Querying Vector DB for: '{user_question}'")
         db_start = time.time()
-        relevant_docs = self.vector_store.similarity_search(user_question, k=5)
+        relevant_docs = self.vector_store.similarity_search(user_question, k=4)
         db_end = time.time()
         db_duration = db_end - db_start
-        context_text = "\n\n".join([doc.page_content for doc in relevant_docs])
+        context_text = "\n\n--- [NEXT DOCUMENT FRAGMENT] ---\n\n".join([doc.page_content for doc in relevant_docs])
         context_token_count = int(len(context_text) / 4)
 
         # =========================================================
@@ -126,25 +126,37 @@ class Assistant:
         # =========================================================
 
         history_context = ""
+        greeting_rule = "5. We are currently in a conversation. DO NOT greet the user again. Answer the question directly and add a sample followup at the end. DO NOT SAY HELLO"
         if self.chat_history:
-            history_context = "Previous Conversation:\n"
-            recent_history = self.chat_history[-3:]
-            for turn in recent_history:
-                history_context += f"Visitor: {turn['user']}\nAssistant: {turn['bot']}\n"
+            last_turn = self.chat_history[-1]
+            raw_history = f"Visitor asked: {last_turn['user']}\nYou answered: {last_turn['bot']}"
+
+            # History Truncation (Keep Start + End)
+            if len(raw_history) > 400:
+                raw_history = raw_history[:100] + " ... [content skipped] ... " + raw_history[-200:]
+
+            history_context = f"Previous Conversation:\n{raw_history}\n"
+        else:
+            greeting_rule = "5. This is the START of the conversation. Greet the user short and warmly, introduce yourself as LUMEN, and list the 3 projects with just their names and a 2 to 3 word description."
         # =========================================================
 
         # --- STEP 2: AUGMENTATION ---
-        # Add {history_context}
-
         prompt = f"""
-        You are a professional technical assistant at a software stall for Lotus Valley school's annual function named Dhanak.
+        You are a professional technical assistant named LUMEN set up at a software stall for Lotus Valley school's annual function named Dhanak.
         You are showcasing: Sigil (Encryption), Coeus (NFC Tool), and LOTL (Game).
         Use the user's preferred language for responses.
+        You are showcasing three DISTINCT and UNRELATED projects: 
+        1. Sigil (Encryption App)
+        2. Coeus (NFC Hardware Tool)
+        3. LOTL (Educational Game)
 
         Instructions:
         1. Answer based ONLY on the Context provided below.
         2. If the answer is not in the Context, say "I don't have that specific information."
         3. Be enthusiastic but professional.
+        4. If the retrieved context contains information about the wrong project, IGNORE IT.
+        {greeting_rule}
+        6. Keep your answers brief.
 
         Context Data:
         {context_text}

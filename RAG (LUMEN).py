@@ -27,7 +27,7 @@ if not args.verbose:
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # --- SYSTEM CONSTANTS ---
-LLM_MODEL = "gemma3n:e4b"
+LLM_MODEL = "qwen2.5:3b"
 EMBED_MODEL = "snowflake-arctic-embed:110m"
 DB_PATH = "./db_lumen_store"
 DATA_DIRECTORY = "./TXT"
@@ -117,7 +117,7 @@ class LumenAssistant:
             logger.info("Indexing new data (Creating Vector Store)...")
 
             text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1500,
+                chunk_size=900,
                 chunk_overlap=200
             )
             docs = text_splitter.create_documents([RAW_DATA])
@@ -155,7 +155,7 @@ class LumenAssistant:
         # lambda_mult=0.5: Balance between "exact match" and "diversity"
         relevant_docs = self.vector_store.max_marginal_relevance_search(
             user_question,
-            k=5,
+            k=2,
             fetch_k=20,
             lambda_mult=0.5
         )
@@ -168,11 +168,11 @@ class LumenAssistant:
 
         # --- MEMORY ---
         history_context = ""
-        if self.chat_history:
-            history_context = "Previous Conversation:\n"
-            recent_history = self.chat_history[-3:]
-            for turn in recent_history:
-                history_context += f"User: {turn['user']}\nLUMEN: {turn['bot']}\n"
+        #if self.chat_history:
+        #    history_context = "Previous Conversation:\n"
+        #    recent_history = self.chat_history[-3:]
+        #    for turn in recent_history:
+        #        history_context += f"User: {turn['user']}\nLUMEN: {turn['bot']}\n"
 
         # --- STEP 2: AUGMENTATION (PROMPT) ---
         prompt = f"""
@@ -190,8 +190,6 @@ class LumenAssistant:
 
         Context Data:
         {context_text}
-
-        {history_context}
 
         Visitor Question: {user_question}
 
@@ -221,7 +219,7 @@ class LumenAssistant:
                 yield text_chunk
 
             # Update Memory
-            self.chat_history.append({"user": user_question, "bot": full_response_accumulator})
+            # self.chat_history.append({"user": user_question, "bot": full_response_accumulator})
 
             if self.verbose:
                 end_time = time.time()
